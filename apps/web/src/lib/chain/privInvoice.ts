@@ -9,6 +9,7 @@ import {
 import type { AuditEvent, Invoice, InvoiceStatus, RiskLevel } from "@/lib/types";
 import { mockUsdzAbi, privInvoiceAbi } from "./abi";
 import { chainConfig, requireConfiguredAddress } from "./config";
+import { withTimeout } from "@/lib/async";
 import {
   assertFheAdapter,
   decryptEligibility,
@@ -33,6 +34,7 @@ export type CreateInvoiceInput = PlainInvoiceFields & {
   industry: string;
   dueDays: number;
   apr: number;
+  onProgress?: (message: string) => void;
 };
 
 const statusMap: InvoiceStatus[] = ["Created", "Eligible", "Rejected", "Funded", "Repaid"];
@@ -284,23 +286,40 @@ export async function fetchChainState(walletAddress?: string | null) {
 }
 
 export async function createInvoiceOnchain(input: CreateInvoiceInput) {
+  console.info("[PrivInvoice] Starting createInvoice flow");
+  input.onProgress?.("Connecting wallet...");
   const { contract, signerAddress } = await getWriteContract();
   const privInvoiceAddress = getPrivInvoiceAddress();
-  const encrypted = await encryptInvoiceFields(privInvoiceAddress, signerAddress, input);
+  console.info("[PrivInvoice] Wallet connected", { signerAddress, privInvoiceAddress });
+  const encrypted = await encryptInvoiceFields(
+    privInvoiceAddress,
+    signerAddress,
+    input,
+    input.onProgress,
+  );
   const aprBps = Math.round(input.apr * 100);
 
-  const tx = await contract.createInvoice(
-    input.id,
-    input.invoiceHash,
-    input.industry,
-    input.dueDays,
-    aprBps,
-    encrypted.encryptedInvoiceAmount,
-    encrypted.encryptedRequestedAmount,
-    encrypted.encryptedCreditScore,
-    encrypted.inputProof,
+  input.onProgress?.("Waiting for wallet transaction approval...");
+  console.info("[PrivInvoice] Sending createInvoice transaction");
+  const tx = await withTimeout(
+    contract.createInvoice(
+      input.id,
+      input.invoiceHash,
+      input.industry,
+      input.dueDays,
+      aprBps,
+      encrypted.encryptedInvoiceAmount,
+      encrypted.encryptedRequestedAmount,
+      encrypted.encryptedCreditScore,
+      encrypted.inputProof,
+    ),
+    120_000,
+    "Wallet transaction approval",
   );
-  await tx.wait();
+  input.onProgress?.("Waiting for Sepolia confirmation...");
+  console.info("[PrivInvoice] Transaction sent", { hash: tx.hash });
+  await withTimeout(tx.wait(), 180_000, "Sepolia transaction confirmation");
+  console.info("[PrivInvoice] createInvoice confirmed", { hash: tx.hash });
 }
 
 export async function evaluateInvoiceOnchain(onchainId: string) {

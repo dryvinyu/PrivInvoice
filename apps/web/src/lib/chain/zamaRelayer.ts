@@ -1,5 +1,7 @@
 import { BrowserProvider } from "ethers";
 import { chainConfig } from "./config";
+import tfheWasmUrl from "tfhe/tfhe_bg.wasm?url";
+import kmsWasmUrl from "tkms/kms_lib_bg.wasm?url";
 
 type RelayerSdk = typeof import("@zama-fhe/relayer-sdk/web");
 type FhevmInstance = Awaited<ReturnType<RelayerSdk["createInstance"]>>;
@@ -28,7 +30,10 @@ async function getRelayerInstance() {
   if (!instancePromise) {
     instancePromise = (async () => {
       const { createInstance, initSDK, SepoliaConfig } = await loadRelayerSdk();
-      await initSDK();
+      await initSDK({
+        tfheParams: tfheWasmUrl,
+        kmsParams: kmsWasmUrl,
+      });
 
       return createInstance({
         ...SepoliaConfig,

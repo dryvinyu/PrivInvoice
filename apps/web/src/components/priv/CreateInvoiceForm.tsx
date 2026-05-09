@@ -19,6 +19,7 @@ const industries = ["Manufacturing", "Logistics", "SaaS", "Energy", "Healthcare"
 export function CreateInvoiceForm() {
   const { createInvoice, walletConnected } = useStore();
   const [submitting, setSubmitting] = useState(false);
+  const [submitStage, setSubmitStage] = useState("");
   const [form, setForm] = useState({
     id: `INV-2026-${String(Math.floor(Math.random() * 900) + 100)}`,
     invoiceHash: "ipfs://Qm",
@@ -49,6 +50,7 @@ export function CreateInvoiceForm() {
     }
 
     setSubmitting(true);
+    setSubmitStage("Connecting wallet...");
     try {
       await createInvoice({
         id: form.id,
@@ -59,7 +61,12 @@ export function CreateInvoiceForm() {
         invoiceAmount: amt,
         requestedAmount: req,
         creditScore: cs,
+        onProgress: (message) => {
+          setSubmitStage(message);
+          toast.loading(message, { id: "create-invoice-progress" });
+        },
       });
+      toast.dismiss("create-invoice-progress");
       toast.success("Encrypted invoice request submitted onchain.");
       setForm((s) => ({
         ...s,
@@ -69,9 +76,12 @@ export function CreateInvoiceForm() {
         creditScore: "",
       }));
     } catch (error) {
+      toast.dismiss("create-invoice-progress");
+      console.error("[PrivInvoice] Failed to submit invoice", error);
       toast.error(error instanceof Error ? error.message : "Failed to submit invoice");
     } finally {
       setSubmitting(false);
+      setSubmitStage("");
     }
   }
 
@@ -168,7 +178,7 @@ export function CreateInvoiceForm() {
         className="mt-6 w-full gap-2 bg-linear-to-r from-primary to-warm text-primary-foreground shadow-glow hover:opacity-95"
       >
         <Sparkles className="h-4 w-4" />
-        {submitting ? "Submitting..." : "Submit Encrypted Invoice"}
+        {submitting ? submitStage || "Submitting..." : "Submit Encrypted Invoice"}
       </Button>
     </form>
   );

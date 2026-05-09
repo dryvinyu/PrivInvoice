@@ -1,3 +1,5 @@
+import { withTimeout } from "@/lib/async";
+
 export type PlainInvoiceFields = {
   invoiceAmount: number;
   requestedAmount: number;
@@ -55,17 +57,27 @@ export async function encryptInvoiceFields(
   contractAddress: string,
   userAddress: string,
   fields: PlainInvoiceFields,
+  onProgress?: (message: string) => void,
 ) {
+  console.info("[PrivInvoice] Preparing FHE encrypted input");
+  onProgress?.("Preparing encrypted input...");
   const adapter = assertFheAdapter();
   if (!adapter.createEncryptedInput) {
     throw new Error("FHE adapter does not expose createEncryptedInput");
   }
 
   const input = adapter.createEncryptedInput(contractAddress, userAddress);
+  console.info("[PrivInvoice] Adding private invoice fields");
   input.add64(BigInt(fields.invoiceAmount));
   input.add64(BigInt(fields.requestedAmount));
   input.add32(BigInt(fields.creditScore));
-  const encrypted = await input.encrypt();
+  onProgress?.("Encrypting fields and requesting input proof...");
+  console.info("[PrivInvoice] Encrypting fields and requesting input proof");
+  const encrypted = await withTimeout(input.encrypt(), 120_000, "FHE encryption/input proof");
+  console.info("[PrivInvoice] FHE encryption completed", {
+    handles: encrypted.handles.length,
+    inputProofBytes: encrypted.inputProof.length,
+  });
 
   if (encrypted.handles.length < 3) {
     throw new Error("FHE encryption did not return the expected invoice handles");

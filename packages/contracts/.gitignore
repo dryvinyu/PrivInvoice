@@ -1,0 +1,38 @@
+node_modules/
+
+# Hardhat / FHEVM build output
+artifacts/
+cache/
+types/
+fhevmTemp/
+deployments/
+
+# Test and coverage output
+coverage/
+coverage.json
+.nyc_output/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Package manager noise
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript / generated output
+dist/
+build/
+*.tsbuildinfo
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Hardhat local vars may contain private deployment config
+.hardhat/

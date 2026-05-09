@@ -1,0 +1,22 @@
+{
+    "name": "privinvoice-platform",
+    "version": "0.1.0",
+    "private": true,
+    "packageManager": "pnpm@9.12.2",
+    "pnpm": {
+        "overrides": {
+            "@zama-fhe/relayer-sdk": "0.4.1"
+        }
+    },
+    "scripts": {
+        "web:dev": "pnpm --dir apps/web dev",
+        "web:build": "pnpm --dir apps/web build",
+        "web:preview": "pnpm --dir apps/web preview",
+        "web:lint": "pnpm --dir apps/web lint",
+        "contracts:compile": "pnpm --dir packages/contracts compile",
+        "contracts:test": "pnpm --dir packages/contracts test",
+        "contracts:typechain": "pnpm --dir packages/contracts typechain",
+        "contracts:deploy:localhost": "pnpm --dir packages/contracts deploy:localhost",
+        "contracts:deploy:sepolia": "pnpm --dir packages/contracts deploy:sepolia"
+    }
+}

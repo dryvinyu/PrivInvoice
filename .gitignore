@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Frontend outputs
+apps/web/dist/
+apps/web/build/
+apps/web/.tanstack/
+apps/web/.wrangler/
+
+# Contracts outputs
+packages/contracts/artifacts/
+packages/contracts/cache/
+packages/contracts/coverage/
+packages/contracts/coverage.json
+packages/contracts/fhevmTemp/
+packages/contracts/types/
+
+# Logs and local env
+*.log
+.env
+.env.*
+!.env.example
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/

@@ -463,7 +463,16 @@ VITE_PRIVINVOICE_ADDRESS=Sepolia 上的 PrivInvoice 地址
 VITE_USDZ_ADDRESS=Sepolia 上的 MockUSDZ 地址
 VITE_DEFAULT_AUDITOR_ADDRESS=审计员钱包地址
 VITE_PRIVINVOICE_DEPLOY_BLOCK=PrivInvoice 部署区块高度
+VITE_ENABLE_MOCK_DATA=false
 ```
+
+如果只想演示前端流程、不想走钱包、FHE、RPC 和真实合约交易，可以临时设置：
+
+```env
+VITE_ENABLE_MOCK_DATA=true
+```
+
+mock 模式会使用本地发票和审计时间线，并模拟创建、评估、finalize、授权审计员、投资、还款和解密流程。切回真实链上流程时改回 `false` 并重启前端 dev server。
 
 Sepolia 部署的成功标准：
 

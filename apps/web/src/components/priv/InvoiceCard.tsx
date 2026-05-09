@@ -4,7 +4,7 @@ import type { Invoice } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { PrivacyBadge } from "./PrivacyBadge";
 import { StatusBadge } from "./StatusBadge";
-import { Building2, KeyRound, ShieldCheck, FileText } from "lucide-react";
+import { Building2, KeyRound, ShieldCheck, FileText, Ban, Banknote } from "lucide-react";
 import { toast } from "sonner";
 
 export function InvoiceCard({
@@ -16,7 +16,8 @@ export function InvoiceCard({
   onOpen?: (i: Invoice) => void;
   showCompanyActions?: boolean;
 }) {
-  const { evaluateInvoice, finalizeEligibility, grantAuditorAccess, markRepaid } = useStore();
+  const { evaluateInvoice, finalizeEligibility, grantAuditorAccess, markRepaid, cancelInvoice } =
+    useStore();
   const [busy, setBusy] = useState<string | null>(null);
 
   async function run(label: string, action: () => Promise<void>, success: string) {
@@ -40,16 +41,27 @@ export function InvoiceCard({
   }
 
   function finalize() {
-    void run("finalize", () => finalizeEligibility(invoice), "Eligibility finalized onchain.");
+    void run("finalize", () => finalizeEligibility(invoice), "Eligibility finalized.");
   }
 
   function grant() {
-    void run("grant", () => grantAuditorAccess(invoice), "Auditor access granted onchain.");
+    void run("grant", () => grantAuditorAccess(invoice), "Auditor access granted.");
   }
 
   function repay() {
-    void run("repay", () => markRepaid(invoice), "Invoice marked repaid onchain.");
+    void run("repay", () => markRepaid(invoice), "Invoice marked repaid.");
   }
+
+  function cancel() {
+    void run(
+      "cancel",
+      () => cancelInvoice(invoice, "Cancelled by company before investor funding."),
+      "Invoice cancelled.",
+    );
+  }
+
+  const canCancel =
+    showCompanyActions && (invoice.status === "Created" || invoice.status === "Eligible");
 
   return (
     <div className="glass group relative overflow-hidden rounded-2xl p-5 transition-all hover:-translate-y-0.5 hover:shadow-elegant">
@@ -60,9 +72,9 @@ export function InvoiceCard({
           </div>
           <div>
             <p className="font-mono text-sm font-medium">{invoice.id}</p>
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
               <Building2 className="h-3 w-3" />
-              {invoice.industry} · {invoice.dueDays}d · {invoice.apr}% APR
+              {invoice.companyName} / {invoice.counterparty}
             </p>
           </div>
         </div>
@@ -75,13 +87,29 @@ export function InvoiceCard({
         <Cell label="Credit" />
       </div>
 
+      <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+        <span>{invoice.industry}</span>
+        <span className="text-right">
+          {invoice.dueDays}d / {invoice.apr}% APR
+        </span>
+        <span>Due {invoice.repaymentDueDate}</span>
+        <span className="text-right">Target {invoice.fundingTarget.toLocaleString()} USDZ</span>
+      </div>
+
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <PrivacyBadge label={invoice.hasEvaluation ? "FHE Evaluated" : "Awaiting FHE Evaluation"} />
-        {invoice.auditorAccessGranted ? (
-          <PrivacyBadge label="Auditor Access" tone="warm" />
-        ) : (
-          <PrivacyBadge label="Auditor Access Required" tone="muted" />
-        )}
+        <PrivacyBadge
+          label={`Audit: ${invoice.auditReviewStatus}`}
+          tone={
+            invoice.auditReviewStatus === "Approved"
+              ? "emerald"
+              : invoice.auditReviewStatus === "Rejected"
+                ? "destructive"
+                : invoice.auditReviewStatus === "NotRequested"
+                  ? "muted"
+                  : "warm"
+          }
+        />
       </div>
 
       {(showCompanyActions || onOpen) && (
@@ -110,7 +138,7 @@ export function InvoiceCard({
               {busy === "finalize" ? "Finalizing..." : "Finalize Eligibility"}
             </Button>
           )}
-          {showCompanyActions && !invoice.auditorAccessGranted && (
+          {showCompanyActions && !invoice.auditorAccessGranted && invoice.status !== "Rejected" && (
             <Button
               size="sm"
               variant="ghost"
@@ -124,7 +152,14 @@ export function InvoiceCard({
           )}
           {showCompanyActions && invoice.status === "Funded" && (
             <Button size="sm" variant="outline" className="gap-1" onClick={repay} disabled={!!busy}>
+              <Banknote className="h-3.5 w-3.5" />
               {busy === "repay" ? "Marking..." : "Mark Repaid"}
+            </Button>
+          )}
+          {canCancel && (
+            <Button size="sm" variant="ghost" className="gap-1" onClick={cancel} disabled={!!busy}>
+              <Ban className="h-3.5 w-3.5" />
+              {busy === "cancel" ? "Cancelling..." : "Cancel"}
             </Button>
           )}
           {onOpen && (
@@ -142,7 +177,7 @@ function Cell({ label }: { label: string }) {
   return (
     <div className="rounded-lg border border-border/60 bg-background/40 p-2.5">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-1 font-mono text-xs tracking-wider text-muted-foreground">••• ENC •••</p>
+      <p className="mt-1 font-mono text-xs tracking-wider text-muted-foreground">ENCRYPTED</p>
     </div>
   );
 }

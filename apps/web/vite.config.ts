@@ -33,5 +33,8 @@ export default defineConfig({
   ],
   vite: {
     assetsInclude: ["**/*.wasm"],
+    optimizeDeps: {
+      exclude: ["@zama-fhe/relayer-sdk", "@zama-fhe/relayer-sdk/web", "tfhe", "tkms"],
+    },
   },
 });

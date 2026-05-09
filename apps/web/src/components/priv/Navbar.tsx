@@ -37,9 +37,9 @@ export function Navbar() {
           ))}
         </nav>
         <div className="flex items-center gap-3">
-          <div className="hidden md:block">
+          {/* <div className="hidden md:block">
             <RoleSwitcher />
-          </div>
+          </div> */}
           <WalletButton />
         </div>
       </div>

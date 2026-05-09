@@ -32,7 +32,7 @@ export function EncryptedField({
           <>
             <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="font-mono text-sm tracking-wider text-muted-foreground">
-              ••• ENCRYPTED •••
+              ENCRYPTED
             </span>
           </>
         )}

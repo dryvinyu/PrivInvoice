@@ -31,6 +31,8 @@ declare global {
 export type CreateInvoiceInput = PlainInvoiceFields & {
   id: string;
   invoiceHash: string;
+  counterparty?: string;
+  documentName?: string;
   industry: string;
   dueDays: number;
   apr: number;
@@ -104,6 +106,10 @@ function riskIndexFromCreditScore(creditScore: number) {
   return 3;
 }
 
+function isoDateAfter(timestamp: number, days: number) {
+  return new Date(timestamp + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function invoiceIdFromArgs(args: Record<string, unknown>) {
   return String(args.invoiceId ?? args[0] ?? "0");
 }
@@ -164,7 +170,7 @@ async function loadAuditEvents(
     makeActor: (args: Record<string, unknown>) => string,
   ) {
     const eventFilter = contract.filters[eventName] as () => unknown;
-    const logs = await contract.queryFilter(eventFilter(), fromBlock);
+    const logs = await contract.queryFilter(eventFilter() as never, fromBlock);
     for (const log of logs) {
       const event = log as never as { args?: Record<string, unknown>; blockNumber: number };
       if (!event.args) continue;
@@ -237,9 +243,13 @@ async function parseInvoice(
     onchainId: onchainIdText,
     id: externalInvoiceId,
     company: publicInvoice[2],
+    companyName: shortAddress(publicInvoice[2]) || "Connected company",
+    counterparty: "Confidential buyer",
     invoiceHash: publicInvoice[3],
+    documentName: `${externalInvoiceId}.pdf`,
     industry: publicInvoice[4],
     dueDays: Number(publicInvoice[5]),
+    dueDate: isoDateAfter(Number(publicInvoice[12]) * 1000, Number(publicInvoice[5])),
     apr: Number(publicInvoice[6]) / 100,
     invoiceAmount: 0,
     requestedAmount: 0,
@@ -250,9 +260,29 @@ async function parseInvoice(
     status: statusFromChain(publicInvoice[7]),
     riskLevel: riskFromChain(publicInvoice[8], publicInvoice[9]),
     investor: publicInvoice[10] === ZeroAddress ? null : publicInvoice[10],
+    investorName: publicInvoice[10] === ZeroAddress ? null : shortAddress(publicInvoice[10]),
     publicFundingAmount: Number(formatUnits(publicInvoice[11], 18)),
     createdAt: Number(publicInvoice[12]) * 1000,
     hasEvaluation: publicInvoice[13],
+    fundingTarget: Number(formatUnits(publicInvoice[11], 18)),
+    fundingDeadline: isoDateAfter(Number(publicInvoice[12]) * 1000, 14),
+    repaymentDueDate: isoDateAfter(Number(publicInvoice[12]) * 1000, Number(publicInvoice[5])),
+    repaidAt: statusFromChain(publicInvoice[7]) === "Repaid" ? Date.now() : null,
+    cancelledAt: null,
+    cancellationReason: null,
+    auditorAddress: chainConfig.defaultAuditorAddress || null,
+    auditReviewStatus:
+      grantedOnchainIds.has(onchainIdText) || currentWalletHasAccess
+        ? "PendingReview"
+        : "NotRequested",
+    auditDecision: null,
+    auditNotes: null,
+    auditReportHash: null,
+    evidenceChecklist: [
+      { label: "Invoice file hash checked", completed: false },
+      { label: "Buyer and supplier matched", completed: false },
+      { label: "Financing ratio reviewed", completed: false },
+    ],
   };
 }
 

@@ -33,6 +33,8 @@ pnpm run web:lint
 
 Chain integration details live in [apps/web/CHAIN_INTEGRATION.md](apps/web/CHAIN_INTEGRATION.md). Copy [apps/web/.env.example](apps/web/.env.example) to `apps/web/.env.local` after deploying contracts, then fill in the RPC URL, PrivInvoice address, USDZ address, default auditor address, and deployment block.
 
+For UI-only role demos, set `VITE_ENABLE_MOCK_DATA=true`. Mock mode now covers Company, Investor, and Auditor workflows without wallet, FHE, RPC, or contract calls.
+
 For the full Chinese end-to-end setup, testing, deployment, and acceptance workflow, see [WORKFLOW_CN.md](WORKFLOW_CN.md).
 
 ## Contracts

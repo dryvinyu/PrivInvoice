@@ -1,24 +1,36 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useStore } from "@/lib/store";
-import { useState } from "react";
-import type { Invoice } from "@/lib/types";
+import { useMemo, useState } from "react";
+import type { AuditReviewStatus, Invoice } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { EncryptedField } from "@/components/priv/EncryptedField";
 import { PrivacyBadge } from "@/components/priv/PrivacyBadge";
 import { AuditTimeline } from "@/components/priv/AuditTimeline";
 import { StatusBadge } from "@/components/priv/StatusBadge";
-import { KeyRound, ShieldCheck, FileCheck2, Lock } from "lucide-react";
+import { mockAuditorAddress } from "@/lib/mock";
+import {
+  KeyRound,
+  ShieldCheck,
+  FileCheck2,
+  Lock,
+  Search,
+  CheckCircle2,
+  XCircle,
+  MessageSquareWarning,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/auditor")({
   head: () => ({
     meta: [
-      { title: "Auditor — PrivInvoice" },
+      { title: "Auditor - PrivInvoice" },
       {
         name: "description",
         content: "Permissioned compliance review with selective FHE decryption.",
       },
-      { property: "og:title", content: "Auditor — PrivInvoice" },
+      { property: "og:title", content: "Auditor - PrivInvoice" },
       {
         property: "og:description",
         content: "Permissioned compliance review with selective FHE decryption.",
@@ -28,8 +40,36 @@ export const Route = createFileRoute("/auditor")({
   component: Auditor,
 });
 
+const reviewFilters: Array<"All" | AuditReviewStatus> = [
+  "All",
+  "PendingReview",
+  "InfoRequested",
+  "Approved",
+  "Rejected",
+];
+
 function Auditor() {
   const { invoices, audit } = useStore();
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"All" | AuditReviewStatus>("All");
+
+  const assigned = useMemo(() => {
+    return invoices
+      .filter(
+        (invoice) => invoice.auditorAccessGranted || invoice.auditorAddress === mockAuditorAddress,
+      )
+      .filter((invoice) => filter === "All" || invoice.auditReviewStatus === filter)
+      .filter((invoice) => {
+        const text = `${invoice.id} ${invoice.companyName} ${invoice.counterparty} ${invoice.industry}`;
+        return text.toLowerCase().includes(query.toLowerCase());
+      });
+  }, [filter, invoices, query]);
+
+  const pending = assigned.filter(
+    (invoice) => invoice.auditReviewStatus === "PendingReview",
+  ).length;
+  const approved = assigned.filter((invoice) => invoice.auditReviewStatus === "Approved").length;
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 md:px-8">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -39,8 +79,8 @@ function Auditor() {
             Permissioned Compliance Review
           </h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
-            Auditors can decrypt sensitive invoice fields only after receiving access from the
-            company. Every decryption is logged onchain.
+            Review assigned invoices, decrypt authorized fields, record decisions, and produce audit
+            reports.
           </p>
         </div>
         <div className="flex gap-2">
@@ -49,11 +89,46 @@ function Auditor() {
         </div>
       </div>
 
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <QueueCard label="Assigned Cases" value={assigned.length} />
+        <QueueCard label="Pending Review" value={pending} />
+        <QueueCard label="Approved Reports" value={approved} />
+      </div>
+
+      <div className="mb-6 grid gap-3 lg:grid-cols-[1fr_auto]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search invoice, company, buyer"
+            className="pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {reviewFilters.map((item) => (
+            <Button
+              key={item}
+              size="sm"
+              variant={filter === item ? "default" : "outline"}
+              onClick={() => setFilter(item)}
+            >
+              {item}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         <div className="space-y-4">
-          {invoices.map((i) => (
+          {assigned.map((i) => (
             <AuditorAccessCard key={i.onchainId} invoice={i} />
           ))}
+          {assigned.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
+              No assigned audit cases match the current filters.
+            </div>
+          ) : null}
         </div>
         <aside className="glass-strong h-fit rounded-2xl p-6">
           <div className="mb-4 flex items-center gap-2">
@@ -68,9 +143,11 @@ function Auditor() {
 }
 
 function AuditorAccessCard({ invoice }: { invoice: Invoice }) {
-  const { decryptInvoice } = useStore();
+  const { decryptInvoice, approveAudit, rejectAudit, requestAuditInfo } = useStore();
   const [revealed, setRevealed] = useState(false);
   const [decrypting, setDecrypting] = useState(false);
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const [notes, setNotes] = useState(invoice.auditNotes ?? "");
   const granted = invoice.auditorAccessGranted;
   const canShowPrivateValues = revealed && invoice.privateValuesLoaded;
   const ruleOk =
@@ -90,22 +167,36 @@ function AuditorAccessCard({ invoice }: { invoice: Invoice }) {
     }
   }
 
+  async function review(
+    action: "approve" | "reject" | "info",
+    handler: (invoice: Invoice, notes: string) => Promise<void>,
+  ) {
+    setReviewing(action);
+    try {
+      await handler(invoice, notes);
+      toast.success("Audit review updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Review failed");
+    } finally {
+      setReviewing(null);
+    }
+  }
+
   return (
     <div className="glass-strong rounded-2xl p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-mono text-sm">{invoice.id}</p>
           <p className="text-xs text-muted-foreground">
-            {invoice.company} · {invoice.industry}
+            {invoice.companyName} / {invoice.counterparty} / {invoice.industry}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <StatusBadge status={invoice.status} />
-          {granted ? (
-            <PrivacyBadge label="Access Granted" tone="warm" />
-          ) : (
-            <PrivacyBadge label="Access Not Granted" tone="muted" />
-          )}
+          <PrivacyBadge
+            label={invoice.auditReviewStatus}
+            tone={reviewTone(invoice.auditReviewStatus)}
+          />
         </div>
       </div>
 
@@ -162,7 +253,7 @@ function AuditorAccessCard({ invoice }: { invoice: Invoice }) {
               <>
                 <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs">
                   <ShieldCheck className="h-3 w-3" />
-                  Rule: requested ≤ 80% invoice ·{" "}
+                  Rule: requested {"<="} 80% invoice /{" "}
                   <span className={ruleOk ? "text-primary" : "text-destructive"}>
                     {ruleOk ? "OK" : "Failed"}
                   </span>
@@ -174,8 +265,89 @@ function AuditorAccessCard({ invoice }: { invoice: Invoice }) {
               </>
             )}
           </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_.9fr]">
+            <div className="space-y-3">
+              <Textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Add review notes, buyer confirmation, or exception reason"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => review("approve", approveAudit)}
+                  disabled={!!reviewing}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {reviewing === "approve" ? "Saving..." : "Approve"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={() => review("info", requestAuditInfo)}
+                  disabled={!!reviewing}
+                >
+                  <MessageSquareWarning className="h-3.5 w-3.5" />
+                  Request Info
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="gap-1"
+                  onClick={() => review("reject", rejectAudit)}
+                  disabled={!!reviewing}
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  Reject
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-muted/25 p-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                Evidence Checklist
+              </p>
+              <div className="mt-2 space-y-2">
+                {invoice.evidenceChecklist.map((item) => (
+                  <div key={item.label} className="flex items-center gap-2 text-xs">
+                    <span
+                      className={
+                        item.completed
+                          ? "h-2 w-2 rounded-full bg-primary"
+                          : "h-2 w-2 rounded-full bg-muted-foreground"
+                      }
+                    />
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+              {invoice.auditReportHash ? (
+                <p className="mt-3 truncate font-mono text-xs text-muted-foreground">
+                  {invoice.auditReportHash}
+                </p>
+              ) : null}
+            </div>
+          </div>
         </>
       )}
     </div>
   );
+}
+
+function QueueCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="glass-strong rounded-2xl p-5">
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function reviewTone(status: AuditReviewStatus) {
+  if (status === "Approved") return "emerald";
+  if (status === "Rejected") return "destructive";
+  if (status === "NotRequested") return "muted";
+  return "warm";
 }

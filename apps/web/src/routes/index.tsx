@@ -25,7 +25,7 @@ function Landing() {
   return (
     <main className="relative">
       <section className="relative overflow-hidden">
-        <div className="grid-bg absolute inset-0 opacity-40" />
+        <div className="grid-bg pointer-events-none absolute inset-0 opacity-40" />
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 md:px-8 md:py-28 lg:grid-cols-2">
           <div>
             <PrivacyBadge label="Powered by Zama FHE" />
@@ -47,7 +47,8 @@ function Landing() {
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link to="/marketplace">View Demo Flow</Link>
+                {/* <Link to="/marketplace">View Demo Flow</Link> */}
+                <Link to="/docs">Read the Docs</Link>
               </Button>
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -79,7 +80,7 @@ function HeroPreview() {
   ] as const;
   return (
     <div className="relative">
-      <div className="absolute -inset-12 bg-[radial-gradient(ellipse_at_center,var(--primary)/.18,transparent_60%)] blur-2xl" />
+      <div className="pointer-events-none absolute -inset-12 bg-[radial-gradient(ellipse_at_center,var(--primary)/.18,transparent_60%)] blur-2xl" />
       <div className="glass-strong relative rounded-3xl p-6 shadow-elegant">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -284,7 +285,7 @@ function CTA() {
   return (
     <section className="mx-auto max-w-7xl px-4 pb-24 md:px-8">
       <div className="glass-strong relative overflow-hidden rounded-3xl p-10 text-center shadow-elegant">
-        <div className="absolute inset-0 bg-linear-to-br from-primary/15 via-transparent to-warm/10" />
+        <div className="pointer-events-none absolute inset-0 bg-linear-to-br from-primary/15 via-transparent to-warm/10" />
         <div className="relative">
           <ScrollText className="mx-auto h-8 w-8 text-primary" />
           <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">

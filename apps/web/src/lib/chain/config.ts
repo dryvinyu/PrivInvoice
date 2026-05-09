@@ -1,4 +1,5 @@
 export const chainConfig = {
+  mockDataEnabled: import.meta.env.VITE_ENABLE_MOCK_DATA === "true",
   privInvoiceAddress: import.meta.env.VITE_PRIVINVOICE_ADDRESS?.trim() || "",
   usdzAddress: import.meta.env.VITE_USDZ_ADDRESS?.trim() || "",
   rpcUrl: import.meta.env.VITE_RPC_URL?.trim() || "",

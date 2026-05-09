@@ -12,7 +12,18 @@ VITE_PRIVINVOICE_ADDRESS=0x...
 VITE_USDZ_ADDRESS=0x...
 VITE_DEFAULT_AUDITOR_ADDRESS=0x...
 VITE_PRIVINVOICE_DEPLOY_BLOCK=0
+VITE_ENABLE_MOCK_DATA=false
 ```
+
+Set `VITE_ENABLE_MOCK_DATA=true` to run the UI with local demo invoices and simulated lifecycle actions instead of wallet, FHE, RPC, and contract calls.
+
+Mock mode currently includes the full role demo surface:
+
+- Company: company-scoped invoices, filters/search, company profile, document metadata, buyer name, eligibility actions, auditor access, cancellation, repayment, and operations queue.
+- Investor: opportunity search, risk filters, APR/due/risk sorting, partial funding progress, estimated yield, maturity date, and portfolio tracking.
+- Auditor: assigned case queue, review filters, permissioned decryption, evidence checklist, approve/reject/request-info decisions, notes, and report hash display.
+
+The added workflow fields are mock-first. The original chain path still reads the deployed contract as the source of truth and fills those extended UI fields with safe display defaults where the contract does not expose them yet.
 
 ## Required FHE Adapter
 

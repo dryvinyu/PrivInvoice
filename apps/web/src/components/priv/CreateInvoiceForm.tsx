@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useStore } from "@/lib/store";
+import { chainConfig } from "@/lib/chain/config";
 import { PrivacyBadge } from "./PrivacyBadge";
 import { Lock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +24,8 @@ export function CreateInvoiceForm() {
   const [form, setForm] = useState({
     id: `INV-2026-${String(Math.floor(Math.random() * 900) + 100)}`,
     invoiceHash: "ipfs://Qm",
+    documentName: "invoice.pdf",
+    counterparty: "",
     industry: "Manufacturing",
     dueDays: "60",
     apr: "8",
@@ -44,7 +47,7 @@ export function CreateInvoiceForm() {
       toast.error("Please complete all encrypted fields");
       return;
     }
-    if (!walletConnected) {
+    if (!walletConnected && !chainConfig.mockDataEnabled) {
       toast.error("Please connect your wallet first");
       return;
     }
@@ -55,6 +58,8 @@ export function CreateInvoiceForm() {
       await createInvoice({
         id: form.id,
         invoiceHash: form.invoiceHash,
+        documentName: form.documentName,
+        counterparty: form.counterparty,
         industry: form.industry,
         dueDays: Number(form.dueDays),
         apr: Number(form.apr),
@@ -71,6 +76,8 @@ export function CreateInvoiceForm() {
       setForm((s) => ({
         ...s,
         id: `INV-2026-${String(Math.floor(Math.random() * 900) + 100)}`,
+        documentName: "invoice.pdf",
+        counterparty: "",
         invoiceAmount: "",
         requestedAmount: "",
         creditScore: "",
@@ -105,6 +112,16 @@ export function CreateInvoiceForm() {
         </Field>
         <Field label="Invoice Hash">
           <Input value={form.invoiceHash} onChange={(e) => set("invoiceHash", e.target.value)} />
+        </Field>
+        <Field label="Document Name">
+          <Input value={form.documentName} onChange={(e) => set("documentName", e.target.value)} />
+        </Field>
+        <Field label="Buyer / Debtor">
+          <Input
+            value={form.counterparty}
+            onChange={(e) => set("counterparty", e.target.value)}
+            placeholder="Acme Retail Group"
+          />
         </Field>
         <Field label="Industry">
           <Select value={form.industry} onValueChange={(v) => set("industry", v)}>

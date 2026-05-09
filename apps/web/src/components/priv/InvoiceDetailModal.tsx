@@ -14,7 +14,7 @@ import { StatusBadge } from "./StatusBadge";
 import { PrivacyBadge } from "./PrivacyBadge";
 import { AuditTimeline } from "./AuditTimeline";
 import { useStore } from "@/lib/store";
-import { Building2, Calendar, Percent, Hash, type LucideIcon } from "lucide-react";
+import { Building2, Calendar, Percent, Hash, FileText, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 export function InvoiceDetailModal({
@@ -41,9 +41,12 @@ export function InvoiceDetailModal({
 
   if (!current) return null;
   const events: AuditEvent[] = audit.filter((e) => e.invoiceId === current.id);
-  const fundedPct = current.status === "Funded" ? 100 : current.status === "Eligible" ? 35 : 0;
-  const fundedWidthClass =
-    current.status === "Funded" ? "w-full" : current.status === "Eligible" ? "w-[35%]" : "w-0";
+  const fundedPct = Math.min(
+    100,
+    current.fundingTarget > 0
+      ? Math.round((current.publicFundingAmount / current.fundingTarget) * 100)
+      : 0,
+  );
   const privateReveal = canDecrypt && revealed && current.privateValuesLoaded;
 
   async function toggleDecryption() {
@@ -70,14 +73,14 @@ export function InvoiceDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl glass-strong">
+      <DialogContent className="max-w-3xl glass-strong">
         <DialogHeader>
           <div className="flex items-center justify-between gap-3">
             <DialogTitle className="font-mono">{current.id}</DialogTitle>
             <StatusBadge status={current.status} />
           </div>
           <DialogDescription>
-            {current.industry} · {current.dueDays}d · {current.apr}% APR
+            {current.companyName} / {current.counterparty} / {current.apr}% APR
           </DialogDescription>
         </DialogHeader>
 
@@ -91,17 +94,19 @@ export function InvoiceDetailModal({
 
           <TabsContent value="overview" className="mt-4 grid grid-cols-2 gap-3">
             <Meta icon={Hash} label="Invoice ID" value={current.id} />
-            <Meta icon={Building2} label="Industry" value={current.industry} />
-            <Meta icon={Calendar} label="Due Days" value={`${current.dueDays} days`} />
+            <Meta icon={Building2} label="Company" value={current.companyName} />
+            <Meta icon={Building2} label="Buyer" value={current.counterparty} />
+            <Meta icon={Calendar} label="Repayment Due" value={current.repaymentDueDate} />
             <Meta icon={Percent} label="APR" value={`${current.apr}%`} />
+            <Meta icon={FileText} label="Document" value={current.documentName} />
             <Meta icon={Hash} label="Hash" value={current.invoiceHash} mono />
-            <Meta icon={Building2} label="Company" value={current.company} mono />
+            <Meta icon={Building2} label="Wallet" value={current.company} mono />
           </TabsContent>
 
           <TabsContent value="privacy" className="mt-4 space-y-3">
             <p className="text-sm text-muted-foreground">
-              These values are stored and processed as encrypted values. Smart contracts evaluate
-              eligibility without revealing raw business data.
+              Sensitive values are stored and processed as encrypted values. The marketplace only
+              sees public terms, risk level, and financing status.
             </p>
             <div className="grid gap-3 md:grid-cols-3">
               <EncryptedField
@@ -144,15 +149,33 @@ export function InvoiceDetailModal({
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-background">
                 <div
-                  className={`h-full rounded-full bg-linear-to-r from-primary to-warm transition-all ${fundedWidthClass}`}
+                  className="h-full rounded-full bg-linear-to-r from-primary to-warm transition-all"
+                  style={{ width: `${fundedPct}%` }}
                 />
               </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <Meta
+                icon={Hash}
+                label="Funding Target"
+                value={`${current.fundingTarget.toLocaleString()} USDZ`}
+              />
+              <Meta
+                icon={Hash}
+                label="Funded"
+                value={`${current.publicFundingAmount.toLocaleString()} USDZ`}
+              />
+              <Meta icon={Calendar} label="Funding Deadline" value={current.fundingDeadline} />
             </div>
             <div className="flex flex-wrap gap-2">
               <PrivacyBadge
                 label="Eligibility Verified"
                 tone={
-                  current.status === "Eligible" || current.status === "Funded" ? "emerald" : "muted"
+                  current.status === "Eligible" ||
+                  current.status === "Funded" ||
+                  current.status === "Repaid"
+                    ? "emerald"
+                    : "muted"
                 }
               />
               <PrivacyBadge
@@ -165,18 +188,33 @@ export function InvoiceDetailModal({
                       : "warning"
                 }
               />
+              {current.investorName ? (
+                <PrivacyBadge label={current.investorName} tone="warm" />
+              ) : null}
             </div>
           </TabsContent>
 
-          <TabsContent value="audit" className="mt-4">
-            <div className="mb-3 flex items-center gap-2">
+          <TabsContent value="audit" className="mt-4 space-y-3">
+            <div className="flex flex-wrap gap-2">
               <PrivacyBadge
                 label={
                   current.auditorAccessGranted ? "Auditor Access Granted" : "Auditor Access Pending"
                 }
                 tone={current.auditorAccessGranted ? "warm" : "muted"}
               />
+              <PrivacyBadge
+                label={current.auditReviewStatus}
+                tone={auditTone(current.auditReviewStatus)}
+              />
             </div>
+            {current.auditDecision ? (
+              <div className="rounded-xl border border-border/60 bg-muted/25 p-3 text-sm">
+                {current.auditDecision}
+              </div>
+            ) : null}
+            {current.auditReportHash ? (
+              <Meta icon={Hash} label="Audit Report" value={current.auditReportHash} mono />
+            ) : null}
             <AuditTimeline events={events} />
           </TabsContent>
         </Tabs>
@@ -205,4 +243,11 @@ function Meta({
       <p className={`mt-1 truncate text-sm ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   );
+}
+
+function auditTone(status: Invoice["auditReviewStatus"]) {
+  if (status === "Approved") return "emerald";
+  if (status === "Rejected") return "destructive";
+  if (status === "NotRequested") return "muted";
+  return "warm";
 }

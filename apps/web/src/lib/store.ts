@@ -12,6 +12,22 @@ import {
   recordAndDecryptInvoiceOnchain,
   type CreateInvoiceInput,
 } from "./chain/privInvoice";
+import { chainConfig } from "./chain/config";
+import {
+  cancelMockInvoice,
+  createMockInvoice,
+  decryptMockInvoice,
+  evaluateMockInvoice,
+  fetchMockChainState,
+  finalizeMockEligibility,
+  fundMockInvoice,
+  grantMockAuditorAccess,
+  markMockRepaid,
+  requestMockAuditInfo,
+  reviewMockInvoice,
+  updateMockAuditor,
+  mockWalletAddress,
+} from "./mock";
 
 type State = {
   role: Role;
@@ -31,6 +47,11 @@ type State = {
   grantAuditorAccess: (invoice: Invoice) => Promise<void>;
   fundInvoice: (invoice: Invoice, amount: number) => Promise<void>;
   markRepaid: (invoice: Invoice) => Promise<void>;
+  cancelInvoice: (invoice: Invoice, reason: string) => Promise<void>;
+  assignAuditor: (invoice: Invoice, auditorAddress: string) => Promise<void>;
+  approveAudit: (invoice: Invoice, notes: string) => Promise<void>;
+  rejectAudit: (invoice: Invoice, notes: string) => Promise<void>;
+  requestAuditInfo: (invoice: Invoice, notes: string) => Promise<void>;
   decryptInvoice: (invoice: Invoice) => Promise<void>;
 };
 
@@ -50,7 +71,9 @@ export const useStore = create<State>((set, get) => ({
   refreshChainData: async () => {
     set({ chainLoading: true, chainError: null });
     try {
-      const { invoices, audit } = await fetchChainState(get().walletAddress);
+      const { invoices, audit } = chainConfig.mockDataEnabled
+        ? await fetchMockChainState()
+        : await fetchChainState(get().walletAddress);
       set({ invoices, audit, chainError: null });
     } catch (error) {
       set({ invoices: [], audit: [], chainError: getErrorMessage(error) });
@@ -59,7 +82,9 @@ export const useStore = create<State>((set, get) => ({
     }
   },
   connectWallet: async () => {
-    const walletAddress = await connectBrowserWallet();
+    const walletAddress = chainConfig.mockDataEnabled
+      ? mockWalletAddress
+      : await connectBrowserWallet();
     set({ walletConnected: true, walletAddress });
     await get().refreshChainData();
   },
@@ -68,31 +93,92 @@ export const useStore = create<State>((set, get) => ({
     await get().refreshChainData();
   },
   createInvoice: async (input) => {
-    await createInvoiceOnchain(input);
+    if (chainConfig.mockDataEnabled) {
+      await createMockInvoice(input);
+    } else {
+      await createInvoiceOnchain(input);
+    }
     await get().refreshChainData();
   },
   evaluateInvoice: async (invoice) => {
-    await evaluateInvoiceOnchain(invoice.onchainId);
+    if (chainConfig.mockDataEnabled) {
+      await evaluateMockInvoice(invoice.onchainId);
+    } else {
+      await evaluateInvoiceOnchain(invoice.onchainId);
+    }
     await get().refreshChainData();
   },
   finalizeEligibility: async (invoice) => {
-    await finalizeEligibilityOnchain(invoice.onchainId);
+    if (chainConfig.mockDataEnabled) {
+      await finalizeMockEligibility(invoice.onchainId);
+    } else {
+      await finalizeEligibilityOnchain(invoice.onchainId);
+    }
     await get().refreshChainData();
   },
   grantAuditorAccess: async (invoice) => {
-    await grantAuditorAccessOnchain(invoice.onchainId);
+    if (chainConfig.mockDataEnabled) {
+      await grantMockAuditorAccess(invoice.onchainId);
+    } else {
+      await grantAuditorAccessOnchain(invoice.onchainId);
+    }
     await get().refreshChainData();
   },
   fundInvoice: async (invoice, amount) => {
-    await fundInvoiceOnchain(invoice.onchainId, amount);
+    if (chainConfig.mockDataEnabled) {
+      await fundMockInvoice(invoice.onchainId, amount);
+    } else {
+      await fundInvoiceOnchain(invoice.onchainId, amount);
+    }
     await get().refreshChainData();
   },
   markRepaid: async (invoice) => {
-    await markRepaidOnchain(invoice.onchainId);
+    if (chainConfig.mockDataEnabled) {
+      await markMockRepaid(invoice.onchainId);
+    } else {
+      await markRepaidOnchain(invoice.onchainId);
+    }
+    await get().refreshChainData();
+  },
+  cancelInvoice: async (invoice, reason) => {
+    if (!chainConfig.mockDataEnabled) {
+      throw new Error("Invoice cancellation is available in mock workflow only for now.");
+    }
+    await cancelMockInvoice(invoice.onchainId, reason);
+    await get().refreshChainData();
+  },
+  assignAuditor: async (invoice, auditorAddress) => {
+    if (!chainConfig.mockDataEnabled) {
+      throw new Error("Auditor selection is available in mock workflow only for now.");
+    }
+    await updateMockAuditor(invoice.onchainId, auditorAddress);
+    await get().refreshChainData();
+  },
+  approveAudit: async (invoice, notes) => {
+    if (!chainConfig.mockDataEnabled) {
+      throw new Error("Audit review decisions are available in mock workflow only for now.");
+    }
+    await reviewMockInvoice(invoice.onchainId, "Approved", notes);
+    await get().refreshChainData();
+  },
+  rejectAudit: async (invoice, notes) => {
+    if (!chainConfig.mockDataEnabled) {
+      throw new Error("Audit review decisions are available in mock workflow only for now.");
+    }
+    await reviewMockInvoice(invoice.onchainId, "Rejected", notes);
+    await get().refreshChainData();
+  },
+  requestAuditInfo: async (invoice, notes) => {
+    if (!chainConfig.mockDataEnabled) {
+      throw new Error("Audit information requests are available in mock workflow only for now.");
+    }
+    await requestMockAuditInfo(invoice.onchainId, notes);
     await get().refreshChainData();
   },
   decryptInvoice: async (invoice) => {
-    const privateFields = await recordAndDecryptInvoiceOnchain(invoice.onchainId);
+    const privateFields = chainConfig.mockDataEnabled
+      ? await decryptMockInvoice(invoice.onchainId)
+      : await recordAndDecryptInvoiceOnchain(invoice.onchainId);
     await get().refreshChainData();
     set((state) => ({
       invoices: state.invoices.map((item) =>

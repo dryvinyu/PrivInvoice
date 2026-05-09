@@ -1,4 +1,4 @@
-import { BrowserProvider } from "ethers";
+import { BrowserProvider, hexlify } from "ethers";
 import { chainConfig } from "./config";
 import tfheWasmUrl from "tfhe/tfhe_bg.wasm?url";
 import kmsWasmUrl from "tkms/kms_lib_bg.wasm?url";
@@ -35,10 +35,11 @@ async function getRelayerInstance() {
         kmsParams: kmsWasmUrl,
       });
 
+      const sepoliaConfig = SepoliaConfig as Record<string, unknown> & { network?: string };
       return createInstance({
-        ...SepoliaConfig,
-        network: chainConfig.rpcUrl || SepoliaConfig.network,
-      });
+        ...sepoliaConfig,
+        network: chainConfig.rpcUrl || sepoliaConfig.network,
+      } as never);
     })();
   }
 
@@ -79,7 +80,7 @@ async function userDecrypt(handle: string, contractAddress: string, userAddress:
     eip712.domain,
     {
       UserDecryptRequestVerification: eip712.types.UserDecryptRequestVerification,
-    },
+    } as never,
     eip712.message,
   );
 
@@ -119,8 +120,17 @@ export async function initZamaRelayer() {
             return input;
           });
         },
-        encrypt() {
-          return inputPromise.then((input) => input.encrypt());
+        async encrypt() {
+          const encrypted = await inputPromise.then((input) => input.encrypt());
+          return {
+            handles: encrypted.handles.map((handle) =>
+              typeof handle === "string" ? handle : hexlify(handle),
+            ),
+            inputProof:
+              typeof encrypted.inputProof === "string"
+                ? encrypted.inputProof
+                : hexlify(encrypted.inputProof),
+          };
         },
       };
     },

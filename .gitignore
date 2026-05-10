@@ -3,6 +3,7 @@ node_modules/
 
 # Frontend outputs
 apps/web/dist/
+apps/web/dist-vercel/
 apps/web/build/
 apps/web/.tanstack/
 apps/web/.wrangler/

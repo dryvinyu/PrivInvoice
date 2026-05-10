@@ -1,6 +1,6 @@
 {
-  "buildCommand": "pnpm web:build",
-  "outputDirectory": "apps/web/dist/client",
+  "buildCommand": "pnpm web:build:vercel",
+  "outputDirectory": "apps/web/dist-vercel",
   "rewrites": [
     {
       "source": "/(.*)",

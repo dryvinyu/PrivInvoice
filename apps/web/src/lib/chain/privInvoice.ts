@@ -17,6 +17,7 @@ import {
   encryptInvoiceFields,
   type PlainInvoiceFields,
 } from "./fhe";
+import { initZamaRelayer } from "./zamaRelayer";
 
 type EthereumProvider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -321,6 +322,8 @@ export async function createInvoiceOnchain(input: CreateInvoiceInput) {
   const { contract, signerAddress } = await getWriteContract();
   const privInvoiceAddress = getPrivInvoiceAddress();
   console.info("[PrivInvoice] Wallet connected", { signerAddress, privInvoiceAddress });
+  input.onProgress?.("Initializing Zama relayer SDK...");
+  await initZamaRelayer();
   const encrypted = await encryptInvoiceFields(
     privInvoiceAddress,
     signerAddress,
@@ -377,6 +380,7 @@ export async function decryptPrivateInvoiceFields(onchainId: string) {
 }
 
 export async function finalizeEligibilityOnchain(onchainId: string) {
+  await initZamaRelayer();
   assertFheAdapter();
   const { contract: readContract } = await getReadContract();
   const { contract, signerAddress } = await getWriteContract();
@@ -426,6 +430,7 @@ export async function markRepaidOnchain(onchainId: string) {
 }
 
 export async function recordAndDecryptInvoiceOnchain(onchainId: string) {
+  await initZamaRelayer();
   assertFheAdapter();
   const { contract } = await getWriteContract();
   const tx = await contract.recordDecryption(onchainId);

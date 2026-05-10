@@ -11,7 +11,6 @@ import {
 import { Navbar } from "@/components/priv/Navbar";
 import { Toaster } from "@/components/ui/sonner";
 import { useStore } from "@/lib/store";
-import { initZamaRelayer } from "@/lib/chain/zamaRelayer";
 
 import appCss from "../styles.css?url";
 
@@ -120,23 +119,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FheAdapterBootstrap() {
-  useEffect(() => {
-    void initZamaRelayer().catch((error) => {
-      console.error("Failed to initialize Zama relayer SDK", error);
-    });
-  }, []);
-
-  return null;
-}
-
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-screen">
-        <FheAdapterBootstrap />
         <ChainDataSync />
         <Navbar />
         <Outlet />

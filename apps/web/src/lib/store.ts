@@ -86,11 +86,11 @@ export const useStore = create<State>((set, get) => ({
       ? mockWalletAddress
       : await connectBrowserWallet();
     set({ walletConnected: true, walletAddress });
-    await get().refreshChainData();
+    void get().refreshChainData();
   },
   disconnectWallet: async () => {
     set({ walletConnected: false, walletAddress: null });
-    await get().refreshChainData();
+    void get().refreshChainData();
   },
   createInvoice: async (input) => {
     if (chainConfig.mockDataEnabled) {

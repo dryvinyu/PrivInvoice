@@ -11,6 +11,7 @@ import {
 import { Navbar } from "@/components/priv/Navbar";
 import { Toaster } from "@/components/ui/sonner";
 import { useStore } from "@/lib/store";
+import { chainConfig } from "@/lib/chain/config";
 
 import appCss from "../styles.css?url";
 
@@ -127,10 +128,30 @@ function RootComponent() {
       <div className="min-h-screen">
         <ChainDataSync />
         <Navbar />
+        <ChainStatus />
         <Outlet />
         <Toaster />
       </div>
     </QueryClientProvider>
+  );
+}
+
+function ChainStatus() {
+  const chainLoading = useStore((state) => state.chainLoading);
+  const chainError = useStore((state) => state.chainError);
+
+  if (chainConfig.mockDataEnabled || (!chainLoading && !chainError)) {
+    return null;
+  }
+
+  return (
+    <div className="border-b border-border/60 bg-muted/40 px-4 py-2 text-center text-xs text-muted-foreground">
+      {chainError ? (
+        <span className="text-destructive">{chainError}</span>
+      ) : (
+        <span>Loading Sepolia invoice data...</span>
+      )}
+    </div>
   );
 }
 

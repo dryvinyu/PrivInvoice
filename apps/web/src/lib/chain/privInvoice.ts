@@ -17,7 +17,6 @@ import {
   encryptInvoiceFields,
   type PlainInvoiceFields,
 } from "./fhe";
-import { initZamaRelayer } from "./zamaRelayer";
 
 type EthereumProvider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -42,9 +41,16 @@ export type CreateInvoiceInput = PlainInvoiceFields & {
 
 const statusMap: InvoiceStatus[] = ["Created", "Eligible", "Rejected", "Funded", "Repaid"];
 const riskMap: RiskLevel[] = ["Unset", "Low", "Medium", "High"];
+const CHAIN_READ_TIMEOUT_MS = 20_000;
+const MAX_FRONTEND_INVOICE_SCAN = 50n;
 
 function getPrivInvoiceAddress() {
   return requireConfiguredAddress(chainConfig.privInvoiceAddress, "VITE_PRIVINVOICE_ADDRESS");
+}
+
+async function ensureZamaRelayer() {
+  const { initZamaRelayer } = await import("./zamaRelayer");
+  await initZamaRelayer();
 }
 
 function getUsdzAddress() {
@@ -116,7 +122,11 @@ function invoiceIdFromArgs(args: Record<string, unknown>) {
 }
 
 async function blockTimestamp(provider: BrowserProvider | JsonRpcProvider, blockNumber: number) {
-  const block = await provider.getBlock(blockNumber);
+  const block = await withTimeout(
+    provider.getBlock(blockNumber),
+    CHAIN_READ_TIMEOUT_MS,
+    `block ${blockNumber} timestamp lookup`,
+  );
   return Number(block?.timestamp ?? 0) * 1000;
 }
 
@@ -143,7 +153,15 @@ async function loadAuditEvents(
     return ts;
   }
 
-  const createdLogs = await contract.queryFilter(contract.filters.InvoiceCreated(), fromBlock);
+  async function queryEventLogs(eventName: string, filter: unknown) {
+    return withTimeout(
+      contract.queryFilter(filter as never, fromBlock),
+      CHAIN_READ_TIMEOUT_MS,
+      `${eventName} event query`,
+    );
+  }
+
+  const createdLogs = await queryEventLogs("InvoiceCreated", contract.filters.InvoiceCreated());
   for (const log of createdLogs) {
     const event = log as never as {
       args?: { invoiceId?: bigint; company?: string; externalInvoiceId?: string };
@@ -171,7 +189,7 @@ async function loadAuditEvents(
     makeActor: (args: Record<string, unknown>) => string,
   ) {
     const eventFilter = contract.filters[eventName] as () => unknown;
-    const logs = await contract.queryFilter(eventFilter() as never, fromBlock);
+    const logs = await queryEventLogs(eventName, eventFilter());
     for (const log of logs) {
       const event = log as never as { args?: Record<string, unknown>; blockNumber: number };
       if (!event.args) continue;
@@ -293,20 +311,40 @@ export async function connectBrowserWallet() {
 }
 
 export async function fetchChainState(walletAddress?: string | null) {
+  if (chainConfig.deploymentBlock <= 0) {
+    throw new Error(
+      "VITE_PRIVINVOICE_DEPLOY_BLOCK is not configured. Set it to the PrivInvoice deployment block to avoid scanning Sepolia from genesis.",
+    );
+  }
+
   const { provider, contract } = await getReadContract();
-  const [auditQuery, nextInvoiceId] = await Promise.all([
-    loadAuditEvents(contract, provider),
+  const nextInvoiceId = await withTimeout(
     contract.nextInvoiceId(),
-  ]);
+    CHAIN_READ_TIMEOUT_MS,
+    "nextInvoiceId read",
+  );
+  const auditQuery = await loadAuditEvents(contract, provider).catch((error) => {
+    console.warn("[PrivInvoice] Audit event loading skipped", error);
+    return {
+      events: [],
+      grantedOnchainIds: new Set<string>(),
+    };
+  });
 
   const ids: bigint[] = [];
-  for (let invoiceId = 1n; invoiceId < nextInvoiceId; invoiceId++) {
+  const firstInvoiceId =
+    nextInvoiceId > MAX_FRONTEND_INVOICE_SCAN ? nextInvoiceId - MAX_FRONTEND_INVOICE_SCAN : 1n;
+  for (let invoiceId = firstInvoiceId; invoiceId < nextInvoiceId; invoiceId++) {
     ids.push(invoiceId);
   }
 
   const invoices = await Promise.all(
     ids.map((invoiceId) =>
-      parseInvoice(contract, invoiceId, walletAddress, auditQuery.grantedOnchainIds),
+      withTimeout(
+        parseInvoice(contract, invoiceId, walletAddress, auditQuery.grantedOnchainIds),
+        CHAIN_READ_TIMEOUT_MS,
+        `invoice ${invoiceId.toString()} read`,
+      ),
     ),
   );
 
@@ -323,7 +361,7 @@ export async function createInvoiceOnchain(input: CreateInvoiceInput) {
   const privInvoiceAddress = getPrivInvoiceAddress();
   console.info("[PrivInvoice] Wallet connected", { signerAddress, privInvoiceAddress });
   input.onProgress?.("Initializing Zama relayer SDK...");
-  await initZamaRelayer();
+  await ensureZamaRelayer();
   const encrypted = await encryptInvoiceFields(
     privInvoiceAddress,
     signerAddress,
@@ -380,7 +418,7 @@ export async function decryptPrivateInvoiceFields(onchainId: string) {
 }
 
 export async function finalizeEligibilityOnchain(onchainId: string) {
-  await initZamaRelayer();
+  await ensureZamaRelayer();
   assertFheAdapter();
   const { contract: readContract } = await getReadContract();
   const { contract, signerAddress } = await getWriteContract();
@@ -430,7 +468,7 @@ export async function markRepaidOnchain(onchainId: string) {
 }
 
 export async function recordAndDecryptInvoiceOnchain(onchainId: string) {
-  await initZamaRelayer();
+  await ensureZamaRelayer();
   assertFheAdapter();
   const { contract } = await getWriteContract();
   const tx = await contract.recordDecryption(onchainId);
